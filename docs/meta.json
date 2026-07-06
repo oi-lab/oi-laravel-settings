@@ -1,7 +1,7 @@
 {
     "type": "package",
     "name": "oi-lab/oi-laravel-settings",
-    "title": "OiLaravelSettings",
+    "title": "OI Laravel Settings",
     "description": "Configuration settings management for Laravel with scoped values, typed casts and spatie/laravel-data value objects.",
     "order": 100
 }
