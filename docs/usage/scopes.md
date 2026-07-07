@@ -10,8 +10,9 @@ order: 3
 A **scope** is any `string|int|null` identifier — a shop id, a team id, a locale.
 `null` is the **global layer**. Every read resolves in this order:
 
-```
-current scope  →  global (null)  →  provided default
+```mermaid
+flowchart LR
+    A["current scope"] --> B["global (null)"] --> C["provided default"]
 ```
 
 So you store shared defaults globally and override only what differs per scope.

@@ -4,6 +4,11 @@ All notable changes to `oi-lab/oi-laravel-settings` will be documented in this f
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Changed
+- Documentation: the scope resolution diagram in `docs/usage/scopes.md` is now authored as a Mermaid `flowchart` block instead of ASCII art, matching the Mermaid diagram standard rendered by `oi-lab/oi-laravel-documentation`.
+
 ## [1.0.0] - 2026-07-01
 
 ### Added
