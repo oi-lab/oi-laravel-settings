@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-07-17
+
+### Fixed
+- The per-scope cache now stores raw scalar payloads (`key => {type, value}`) and casts values on read, instead of caching already-cast values. Previously a typed `spatie/laravel-data` value object was serialised into the cache and, with the default `cache.ttl => null` (forever), survived deploys; when the value object's class was renamed, moved, or reshaped it deserialised to a `__PHP_Incomplete_Class`, so `Settings::get()` returned a broken object (an `instanceof` check would fail) until a manual `cache:clear`. Casting on read keeps class-bound objects out of the cache entirely. A cached map left over from the previous format is detected and refetched automatically, so no `cache:clear` is required when upgrading.
+
 ### Changed
 - Documentation: the scope resolution diagram in `docs/usage/scopes.md` is now authored as a Mermaid `flowchart` block instead of ASCII art, matching the Mermaid diagram standard rendered by `oi-lab/oi-laravel-documentation`.
 

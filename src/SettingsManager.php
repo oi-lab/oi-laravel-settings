@@ -6,6 +6,8 @@ use Closure;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Cache;
 use OiLab\OiLaravelSettings\Models\Setting;
+use OiLab\OiLaravelSettings\Support\SettingTypeRegistry;
+use Spatie\LaravelData\Data;
 
 /**
  * Central access point for application settings.
@@ -158,28 +160,63 @@ class SettingsManager
     }
 
     /**
-     * The cached key/value map of the settings owned by a single scope.
+     * The resolved key/value map of the settings owned by a single scope, with
+     * every value cast to its runtime type.
+     *
+     * The cache only ever holds raw scalar payloads (see {@see self::rawMap()}),
+     * so casting happens on read. This keeps typed value objects out of the
+     * cache: a stored {@see Data} instance would deserialise
+     * to a `__PHP_Incomplete_Class` the moment its class changes shape.
      *
      * @return array<string, mixed>
      */
     protected function map(string|int|null $scope): array
+    {
+        $decoded = [];
+
+        foreach ($this->rawMap($scope) as $key => $entry) {
+            $decoded[$key] = SettingTypeRegistry::decode($entry['type'], $entry['value']);
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * The cached raw map for a scope: `key => ['type' => …, 'value' => ?string]`.
+     *
+     * A cached entry is only trusted when it still matches the raw shape, so a
+     * map left over from a previous cache format (which stored cast objects) is
+     * discarded and refetched instead of being handed back corrupted.
+     *
+     * @return array<string, array{type: string, value: ?string}>
+     */
+    protected function rawMap(string|int|null $scope): array
     {
         if (! config('oi-laravel-settings.cache.enabled', true)) {
             return $this->fetchMap($scope);
         }
 
         $key = $this->cacheKey($scope);
+        $cached = $this->cache()->get($key);
+
+        if (is_array($cached) && $this->isRawMap($cached)) {
+            return $cached;
+        }
+
+        $fresh = $this->fetchMap($scope);
         $ttl = config('oi-laravel-settings.cache.ttl');
 
         if ($ttl === null) {
-            return $this->cache()->rememberForever($key, fn () => $this->fetchMap($scope));
+            $this->cache()->forever($key, $fresh);
+        } else {
+            $this->cache()->put($key, $fresh, $ttl);
         }
 
-        return $this->cache()->remember($key, $ttl, fn () => $this->fetchMap($scope));
+        return $fresh;
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<string, array{type: string, value: ?string}>
      */
     protected function fetchMap(string|int|null $scope): array
     {
@@ -188,8 +225,30 @@ class SettingsManager
         return $model::query()
             ->where('scope', $scope)
             ->get()
-            ->mapWithKeys(fn (Setting $setting): array => [$setting->key => $setting->value])
+            ->mapWithKeys(fn (Setting $setting): array => [
+                $setting->key => [
+                    'type' => $setting->type ?? OiLaravelSettings::defaultType(),
+                    'value' => $setting->getRawOriginal('value'),
+                ],
+            ])
             ->all();
+    }
+
+    /**
+     * Whether every entry of a cached map matches the raw payload shape. An
+     * empty map is valid (a scope with no settings).
+     *
+     * @param  array<mixed>  $map
+     */
+    protected function isRawMap(array $map): bool
+    {
+        foreach ($map as $entry) {
+            if (! is_array($entry) || ! array_key_exists('type', $entry) || ! array_key_exists('value', $entry)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

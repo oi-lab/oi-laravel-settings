@@ -99,3 +99,41 @@ it('reads directly when caching is disabled', function () {
     expect($this->manager->get('NOCACHE'))->toBe('v')
         ->and(Cache::has('oi-settings.scope.global'))->toBeFalse();
 });
+
+it('caches raw payloads rather than cast value objects', function () {
+    $this->manager->set('WELCOME_MAIL', new MailContent(subject: 'Hi', body: 'B'), type: 'mail');
+
+    $this->manager->get('WELCOME_MAIL');
+
+    $cached = Cache::get('oi-settings.scope.global');
+
+    expect($cached)->toHaveKey('WELCOME_MAIL')
+        ->and($cached['WELCOME_MAIL']['type'])->toBe('mail')
+        ->and($cached['WELCOME_MAIL']['value'])->toBeString()
+        ->and($cached)->each->not->toBeInstanceOf(MailContent::class);
+});
+
+it('re-casts a typed value object on every read from cache', function () {
+    $this->manager->set('WELCOME_MAIL', new MailContent(subject: 'Hi', body: 'B'), type: 'mail');
+
+    $this->manager->get('WELCOME_MAIL'); // primes the cache
+
+    $value = $this->manager->get('WELCOME_MAIL');
+
+    expect($value)->toBeInstanceOf(MailContent::class)
+        ->and($value->subject)->toBe('Hi');
+});
+
+it('discards and refetches a cached map left in a previous (object) format', function () {
+    $this->manager->set('THEME', 'dark');
+
+    // Simulate a cache entry poisoned by the old format, which stored cast
+    // values (here an object) directly under the setting key.
+    Cache::forever('oi-settings.scope.global', ['THEME' => new stdClass]);
+
+    expect($this->manager->get('THEME'))->toBe('dark');
+
+    $cached = Cache::get('oi-settings.scope.global');
+
+    expect($cached['THEME'])->toBe(['type' => 'string', 'value' => 'dark']);
+});
